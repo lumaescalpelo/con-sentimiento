@@ -1,22 +1,22 @@
 /*
 Con-Sentimiento.
-Fecha: 2025-11-15
+Fecha: 2025-11-23
 By: Luma Escalpelo
 Para: e-Cuerpo
 
 Este programa es el ejemplo base para el manejo de la pantal SSD1306 con una resolución de 128x64 y 128x32.
 
-Este programa esta escritop especifícamente para el ESP32 DevKitV1, encontrado en la lista de microtroladores de Espressif como DOIT ESP32.
-La versión de core necesita es 2.0.17, la versión 3 en adelante genera incompatibilidad con la bilbioteca <ESPAsyncWebServer.h> 
+Este programa esta escrito especifícamente para el ESP32 DevKitV1, encontrado en la lista de microtroladores de Espressif como DOIT ESP32.
+La versión de core necesita es 3.3.4.
 
-
+Es necesario que no haya instalada otras versiones de la biblioteca Async TCP y ESP Async Web Server, únicamente las de ESP32Async.
 */
 
 // Proyecto: Con-Sentimiento COMPLETO con frases, scroll, captive portal y robusta aleatorización
 #include <WiFi.h> // Biblioteca Wifi para el ESP32 DevKit V1 y similares
 #include <DNSServer.h>
-#include <AsyncTCP.h> // by dvarrel
-#include <ESPAsyncWebServer.h> // by lacamera
+#include <AsyncTCP.h> // by ESP32Async, 3.4.9 o superior
+#include <ESPAsyncWebServer.h> // by ESP32Async, 3.9.0 o superior
 #include <Adafruit_GFX.h> // by Adafruit
 #include <Adafruit_SSD1306.h> // by Adafruit
 
@@ -30,8 +30,6 @@ const char* ssid = "con-sentimiento";
 const char* password = "amoramor";
 DNSServer dns;
 AsyncWebServer server(80);
-
-extern "C" uint32_t system_get_time(void);
 
 // Frases OLED
 const char* frases_oled[] = {
@@ -132,7 +130,7 @@ void handleCaptive(AsyncWebServerRequest *request) {
 void setup() {
   Serial.begin(115200);
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) while (true);
-  randomSeed(system_get_time() + micros());
+  randomSeed(esp_random());
   strcpy(mensaje, frases_oled[random(total_frases_oled)]);
   frase_captive_idx = random(total_frases_captive);
   calcularAnchoTexto(mensaje);
