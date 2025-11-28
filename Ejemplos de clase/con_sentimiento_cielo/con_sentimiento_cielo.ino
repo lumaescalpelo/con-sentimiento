@@ -60,7 +60,9 @@ CRGB leds[NUM_LEDS_TOTAL];
 // TEXTOS Y ESTADO OLED
 //--------------------------
 const char* frases_oled[] = {
-  "Mas amor, menos prisa.", "Este cuerpo elige cuando.", "Hoy solo recibo dulzura."
+  "A Cielo abierto-Cuerpo abierto, A Cielo abierto-Sin pulmones.",
+  "A Cielo abierto-Sin agua",
+  "A Cielo abierto-Sin aire con-sentimieneto"
 };
 const int total_frases_oled = sizeof(frases_oled)/sizeof(frases_oled[0]);
 
@@ -78,6 +80,13 @@ uint16_t textoWidth  = 0;
 unsigned long lastScroll = 0;
 const int scrollSpeed = 5;
 int frase_captive_idx;
+
+// *** NUEVO: control de carrusel de frases OLED
+int frase_oled_idx = 0;                         // índice actual del carrusel
+bool usandoCarousel = true;                     // true = usando frases_oled en carrusel
+unsigned long lastPhraseChange = 0;             // último cambio de frase
+const unsigned long dwellTimeMs = 4000;         // tiempo fijo para frases cortas (ms)
+const unsigned long customMessageDurationMs = 30000; // cuánto dura un mensaje de portal antes de volver al carrusel
 
 // -------------------------
 // CONFIGURACIÓN COLORES / EFECTOS (FastLED DemoReel-like)
@@ -191,6 +200,7 @@ void calcularAnchoTexto(const char* text) {
 
 void mostrarMarquesina(const char* text) {
   if (strlen(text) == 0) {
+    // sigue existiendo la opción de escoger aleatorio si alguien manda vacío
     strcpy(mensaje, frases_oled[random(total_frases_oled)]);
     mensaje_actualizado = true;
     return;
@@ -216,11 +226,28 @@ void mostrarMarquesina(const char* text) {
   display.display();
 }
 
+// *** NUEVO: función para avanzar a la siguiente frase del carrusel
+void avanzarFraseCarrusel() {
+  frase_oled_idx = (frase_oled_idx + 1) % total_frases_oled;
+  strcpy(mensaje, frases_oled[frase_oled_idx]);
+  mensaje_actualizado = true;
+  lastPhraseChange = millis();
+  // Actualizamos también los LEDs con la nueva frase del carrusel
+  procesarMensajeLeds(String(mensaje));
+}
+
 void actualizarScroll() {
   if (textoWidth > SCREEN_WIDTH && millis() - lastScroll > scrollSpeed) {
     lastScroll = millis();
     scrollX++;
-    if (scrollX > textoWidth + 20) scrollX = 0;
+    // cuando termina un ciclo completo de scroll
+    if (scrollX > textoWidth + 20) {
+      scrollX = 0;
+      // sólo avanzamos carrusel si estamos en modo carrusel
+      if (usandoCarousel) {
+        avanzarFraseCarrusel();
+      }
+    }
   }
 }
 
@@ -481,11 +508,14 @@ void setup() {
   // Aleatoriedad robusta
   randomSeed(esp_random());
 
-  // Mensaje inicial OLED
-  strcpy(mensaje, frases_oled[random(total_frases_oled)]);
+  // *** NUEVO: mensaje inicial OLED desde carrusel
+  frase_oled_idx = 0; // podrías usar random(total_frases_oled) si prefieres aleatorio
+  strcpy(mensaje, frases_oled[frase_oled_idx]);
+  usandoCarousel = true;
   frase_captive_idx = random(total_frases_captive);
   calcularAnchoTexto(mensaje);
   mostrarMarquesina(mensaje);
+  lastPhraseChange = millis();
 
   // Mensaje inicial para LEDs (usa la misma frase)
   procesarMensajeLeds(String(mensaje));
@@ -511,6 +541,10 @@ void setup() {
 
       // Interpretar la frase para colores/efectos
       procesarMensajeLeds(nuevo);
+
+      // *** NUEVO: al recibir mensaje, salimos del carrusel un rato
+      usandoCarousel = false;
+      lastPhraseChange = millis();
     }
     request->redirect("/");
   });
@@ -521,11 +555,24 @@ void setup() {
 void loop() {
   dns.processNextRequest();
 
+  // *** NUEVO: volver al carrusel después de mostrar un mensaje personalizado cierto tiempo
+  if (!usandoCarousel && (millis() - lastPhraseChange > customMessageDurationMs)) {
+    usandoCarousel = true;
+    avanzarFraseCarrusel();
+  }
+
   if (mensaje_actualizado) {
     calcularAnchoTexto(mensaje);
     scrollX = 0;
     lastScroll = millis();
     mensaje_actualizado = false;
+  }
+
+  // Si estamos en carrusel y la frase cabe completa, usamos dwellTime fijo
+  if (usandoCarousel && textoWidth <= SCREEN_WIDTH) {
+    if (millis() - lastPhraseChange > dwellTimeMs) {
+      avanzarFraseCarrusel();
+    }
   }
 
   actualizarScroll();
